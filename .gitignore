@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Jurnal local: descrieri și rezultate personale
+/local_data/
