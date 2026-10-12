@@ -8,8 +8,8 @@ from google.genai import types
 
 from src.analyzers.provider import GeminiProvider, ProviderError
 from src.config import ConfigurationError, Settings
-from src.models import Author
-from tests.test_core import TEXT, URL, listing
+from src.models import Author, Source
+from tests.test_core import TEXT, URL, assessment, listing
 
 
 def response(text="Răspuns", metadata=None, finish=types.FinishReason.STOP):
@@ -85,6 +85,86 @@ def test_truncated_response_is_error():
     provider, _ = provider_with(response(listing().model_dump_json(), finish=types.FinishReason.MAX_TOKENS))
     with pytest.raises(ProviderError, match="incomplet"):
         provider.extract(TEXT, 10)
+    assert provider.diagnostics[-1].finish_reason == "MAX_TOKENS"
+    assert provider.diagnostics[-1].operation == "extragere"
+    assert provider.diagnostics[-1].outcome == "error"
+
+
+@pytest.mark.parametrize("reason", [types.FinishReason.SAFETY, types.FinishReason.RECITATION,
+                                     types.FinishReason.OTHER, types.FinishReason.MALFORMED_FUNCTION_CALL])
+def test_stop_reasons_are_distinguished_without_accepting_partial_results(reason):
+    provider, _ = provider_with(response(listing().model_dump_json(), finish=reason))
+    with pytest.raises(ProviderError) as error:
+        provider.extract(TEXT, 10)
+    assert reason.value in str(error.value)
+    assert provider.diagnostics[-1].finish_reason == reason.value
+    assert provider.diagnostics[-1].outcome == "error"
+
+
+def test_prompt_block_without_candidate_is_reported():
+    output = types.GenerateContentResponse.model_validate({"promptFeedback": {"blockReason": "SAFETY"}})
+    provider, _ = provider_with(output)
+    with pytest.raises(ProviderError, match="SAFETY"):
+        provider.extract(TEXT, 10)
+    assert provider.diagnostics[-1].block_reason == "SAFETY"
+
+
+def test_unspecified_prompt_feedback_does_not_block_complete_response():
+    output = response(listing().model_dump_json())
+    output.prompt_feedback = types.GenerateContentResponsePromptFeedback(block_reason=types.BlockedReason.BLOCKED_REASON_UNSPECIFIED)
+    provider, _ = provider_with(output)
+    assert provider.extract(TEXT, 10).title == listing().title
+    assert provider.diagnostics[-1].block_reason is None
+
+
+def compact_comparison(count=1):
+    return {
+        "status": "completed", "source_ids": [f"s{i}" for i in range(count)],
+        "results": [{**assessment().model_dump(mode="json", exclude={"url"}), "source_id": f"s{i}"}
+                    for i in range(count)],
+        "limitations": [],
+    }
+
+
+def test_long_grounding_urls_are_not_echoed_in_ai_payload():
+    sources = [Source(url=f"https://vertexaisearch.cloud.google.com/grounding-api-redirect/{i}/" + "x" * 3000,
+                      text=TEXT, access="page", accessed_at="2026-10-12") for i in range(6)]
+    provider, client = provider_with(response(json.dumps(compact_comparison(6))))
+    comparison = provider.compare(listing(), sources, 20)
+    assert comparison.source_urls == [source.url for source in sources]
+    assert [item.url for item in comparison.results] == comparison.source_urls
+    sent = client.models.generate_content.call_args.kwargs["contents"]
+    assert "x" * 3000 not in sent
+    assert '"source_id": "s5"' in sent
+    assert client.models.generate_content.call_count == 1
+    assert provider.diagnostics[-1].operation == "comparare"
+
+
+@pytest.mark.parametrize("variant", ["unknown", "duplicate", "missing", "unknown_source_list"])
+def test_compact_response_must_cover_exact_known_source_ids(variant):
+    payload = compact_comparison(2)
+    if variant == "unknown":
+        payload["results"][0]["source_id"] = "s99"
+    elif variant == "duplicate":
+        payload["results"][1]["source_id"] = "s0"
+    elif variant == "missing":
+        payload["results"].pop()
+    else:
+        payload["source_ids"][1] = "s99"
+    provider, _ = provider_with(response(json.dumps(payload)))
+    sources = [Source(url=f"https://example.com/{i}", text=TEXT, access="page", accessed_at="2026-10-12")
+               for i in range(2)]
+    with pytest.raises(ProviderError, match="identificatori"):
+        provider.compare(listing(), sources, 10)
+
+
+def test_diagnostics_exclude_key_and_listing_text():
+    provider, _ = provider_with(response(listing().model_dump_json()))
+    provider.extract(TEXT, 10)
+    serialized = provider.diagnostics[-1].model_dump_json()
+    assert TEXT not in serialized
+    assert "api_key" not in serialized
+    assert provider.diagnostics[-1].output_tokens == 30
 
 
 def test_network_error_is_sanitized():
@@ -112,3 +192,22 @@ def test_sdk_serialization_with_mock_http():
     assert captured[0]["generationConfig"]["responseMimeType"] == "application/json"
     assert captured[0]["generationConfig"]["responseJsonSchema"]["properties"]["title"]
     assert provider.usage["total_token_count"] == 30
+
+
+def test_sdk_serializes_compact_comparison_and_restores_url():
+    captured = []
+    long_url = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/" + "a" * 3000
+
+    def handle(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json={"candidates": [{
+            "content": {"parts": [{"text": json.dumps(compact_comparison())}], "role": "model"},
+            "finishReason": "STOP"}]})
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as transport:
+        with genai.Client(api_key="test-only-not-a-real-key", http_options=types.HttpOptions(httpx_client=transport)) as client:
+            provider = GeminiProvider(Settings(), client=client)
+            result = provider.compare(listing(), [Source(url=long_url, text=TEXT, access="page", accessed_at="2026-10-12")], 5)
+    assert result.results[0].url == long_url
+    assert "source_ids" in captured[0]["generationConfig"]["responseJsonSchema"]["properties"]
+    assert long_url not in json.dumps(captured[0])

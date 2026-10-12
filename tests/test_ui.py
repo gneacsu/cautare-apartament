@@ -4,7 +4,7 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from src.config import ROOT, Settings
-from src.models import Analysis, Status
+from src.models import APICall, Analysis, Source, Status
 from src.service import analyze
 
 
@@ -41,6 +41,27 @@ def test_missing_key_still_journals_failure(tmp_path):
     assert "GEMINI_API_KEY" in result.message
     assert warning is None
     assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+def test_api_failure_offers_diagnostic_instead_of_manual_input_advice():
+    failed = report(Status.INCOMPLETE, "Limita de tokeni a fost atinsă.")
+    failed.recovery_hint = "Redu MAX_CANDIDATES."
+    failed.diagnostics = [APICall(operation="comparare", model="gemini-2.5-flash", max_output_tokens=3000,
+                                  finish_reason="MAX_TOKENS")]
+    failed.sources = [Source(url="", text="Input manual", access="manual", accessed_at="2026-10-12"),
+                      Source(url="https://example.com/candidat", title="Sursă necomparată", text="Anunț candidat",
+                             access="page", accessed_at="2026-10-12")]
+    with patch("src.service.analyze", return_value=(failed, None)):
+        app = AppTest.from_file(ROOT / "app.py").run()
+        app.text_area[0].set_value("Descriere de test").run()
+        app.button[0].click().run()
+        assert not app.exception
+        assert any(caption.value == "Redu MAX_CANDIDATES." for caption in app.caption)
+        assert not any("Poți copia descrierea" in caption.value for caption in app.caption)
+        assert len(app.get("download_button")) == 1
+        assert "MAX_TOKENS" in app.json[0].value
+        assert len(app.get("link_button")) == 1
+        assert not app.success
 
 
 def test_journal_error_preserves_result(tmp_path):

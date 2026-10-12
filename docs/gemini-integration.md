@@ -35,7 +35,10 @@ activării facturării. Nu au fost folosite chei și nu au fost efectuate apelur
    sunt rezumate susținute de căutare, nu citate independente ale unei pagini.
 3. Programul descarcă paginile și curăță HTML-ul. Sursele inaccesibile rămân marcate.
 4. Comparare: un apel separat fără instrumente, cu schema `Comparison`, ce include
-   stare, surse, rezultate, citate, caracteristici și limitări.
+   stare, surse, rezultate, citate, caracteristici și limitări. Pe fir se folosește
+   schema compactă `CandidateComparison`, cu identificatori scurți de sursă.
+   Programul validează acoperirea exactă a identificatorilor și reconstruiește
+   `Comparison` cu URL-urile originale; linkurile Google lungi nu sunt regenerate de AI.
 5. Programul validează schema, proveniența URL-urilor, citatele și regulile de triere.
    Un răspuns invalid/trunchiat devine eroare, fără reparare automată sau retry plătit.
 
@@ -51,3 +54,7 @@ raportat de interogări și tokeni este păstrat în jurnal, fără estimări in
 Timeouturile și limitele de tokeni nu confirmă finalizarea semantică: răspunsul
 este acceptat numai cu `finish_reason=STOP` și validarea completă a structurii.
 Sugestiile oficiale din `search_entry_point.rendered_content` sunt afișate în iframe.
+
+Fiecare apel înregistrează etapa, limita, utilizarea raportată, `finish_reason` și
+eventualul `prompt_feedback.block_reason`, fără răspunsul brut sau cheia API.
+Răspunsurile trunchiate/blocate rămân respinse, cu explicații distincte în interfață.

@@ -1,3 +1,5 @@
+import json
+
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -61,7 +63,19 @@ if report := st.session_state.get("report"):
         st.warning(report.status.value)
     st.write(report.message)
     if report.status == Status.INCOMPLETE:
-        st.caption("Poți copia descrierea în câmpul alternativ sau apăsa din nou «Caută proprietarul».")
+        st.caption(report.recovery_hint or "Poți reîncerca apăsând «Caută proprietarul».")
+        if report.diagnostics:
+            with st.expander("Detalii pentru diagnostic"):
+                diagnostic_data = {
+                    "analysis_id": report.id,
+                    "checked_at": report.checked_at,
+                    "calls": [call.model_dump(mode="json") for call in report.diagnostics],
+                    "usage": report.usage,
+                }
+                st.json(diagnostic_data)
+                st.download_button("Descarcă diagnosticul", json.dumps(diagnostic_data, ensure_ascii=False, indent=2),
+                                   file_name=f"diagnostic-{report.id}.json", mime="application/json")
+                st.caption("Include etapele, codurile de oprire și consumul; fără cheia API sau textele anunțurilor.")
     for result in report.results:
         with st.container(border=True):
             st.text(result.title)
@@ -82,6 +96,14 @@ if report := st.session_state.get("report"):
             st.link_button(result.title, result.url)
             st.text(result.justification)
             st.caption("Bazat pe informația returnată de căutare; conținutul paginii nu a putut fi confirmat.")
+    if report.status == Status.INCOMPLETE:
+        evaluated = {item.url for item in report.evaluations}
+        pending_sources = [source for source in report.sources[1:] if source.url not in evaluated]
+        if pending_sources:
+            with st.expander("Surse găsite — comparație nefinalizată"):
+                st.caption("Aceste linkuri au fost găsite în căutare. Nu s-a stabilit dacă descriu aceeași proprietate sau dacă autorul este proprietar.")
+                for source in pending_sources:
+                    st.link_button(source.title or "Deschide sursa", source.final_url or source.url)
     st.caption("«Proprietar declarat» descrie afirmația autorului, fără verificarea dreptului de proprietate.")
     if report.limitations:
         with st.expander("Limitele acestei verificări"):

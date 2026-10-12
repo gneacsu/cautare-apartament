@@ -201,6 +201,30 @@ portalurile sau precizia identificării unui apartament. În mediul de implement
 nu a fost configurată o cheie Gemini și nu au fost efectuate apeluri reale.
 Comenzile Windows sunt documentate, dar verificările locale au rulat pe Linux/Python 3.12.
 
+## Dacă Gemini nu finalizează verificarea
+
+Interfața arată acum etapa și motivul concret: `MAX_TOKENS` înseamnă răspuns
+trunchiat, `SAFETY`/alte coduri de blocare indică refuzul furnizorului, iar
+`RECITATION` indică oprirea pentru reproducerea textului. Aceste cazuri nu sunt
+rezultate negative ale căutării. Versiunile vechi le afișau prin același mesaj
+generic și nu păstrau motivul; cauza unei execuții vechi nu poate fi recuperată
+doar din acel mesaj.
+
+În caz de eroare, deschide **Detalii pentru diagnostic** și folosește
+**Descarcă diagnosticul**. Fișierul include etapele, modelul, codurile de oprire și
+consumul raportat, fără cheia API, URL-uri sau textele anunțurilor. Sursele deja
+găsite rămân accesibile separat ca surse cu comparația nefinalizată.
+
+Comparația folosește identificatori scurți (`s0`, `s1` etc.), reconectați la URL-urile
+reale de către program. Linkurile lungi de redirecționare Google nu mai sunt cerute
+în răspunsul JSON. Aceasta reduce consumul fără creșterea plafonului de tokeni sau
+apeluri. Dacă eroarea confirmată este `MAX_TOKENS`, poți reduce `MAX_CANDIDATES=3`
+în `.env` și reîncerca; vor fi verificate mai puține surse. Nu presupune că orice
+blocaj Gemini este cauzat de limita de tokeni.
+
+Un `.env` care conține doar `GEMINI_API_KEY` este valid: celelalte valori au
+implicite în `src/config.py`. Nu este necesar să suprascrii cheia când actualizezi aplicația.
+
 ## Limite cunoscute
 
 Requests/Beautiful Soup nu execută JavaScript și nu ocolesc autentificarea sau

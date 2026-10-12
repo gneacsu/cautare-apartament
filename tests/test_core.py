@@ -9,7 +9,7 @@ from src.analyzers.verification import sufficiently_supported
 from src.analyzers.workflow import Workflow
 from src.config import Settings
 from src.extractors.pages import PageError, extract_html, now
-from src.models import Assessment, Author, Comparison, Facts, Listing, SearchBatch, SearchHit, Source, Status
+from src.models import APICall, Assessment, Author, Comparison, Facts, Listing, SearchBatch, SearchHit, Source, Status
 from src.utils.journal import save_analysis
 from src.utils.urls import InvalidURL, canonical_url
 
@@ -110,6 +110,20 @@ def test_api_error_is_never_negative(setup):
     workflow, provider, _ = setup
     provider.search.side_effect = ProviderError("Serviciul AI nu poate fi accesat.")
     assert run(workflow).status == Status.INCOMPLETE
+
+
+def test_failed_comparison_keeps_search_and_stop_reason_in_journal(setup, tmp_path):
+    workflow, provider, _ = setup
+    provider.diagnostics = [APICall(operation="comparare", model="gemini-2.5-flash", max_output_tokens=3000,
+                                   finish_reason="MAX_TOKENS", output_tokens=3000)]
+    provider.compare.side_effect = ProviderError("Limita de tokeni a fost atinsă.", "Redu MAX_CANDIDATES.")
+    result = run(workflow)
+    assert result.status == Status.INCOMPLETE
+    assert result.queries and len(result.sources) == 2
+    assert result.results == []
+    assert result.recovery_hint == "Redu MAX_CANDIDATES."
+    saved = json.loads(save_analysis(result, tmp_path).read_text(encoding="utf-8"))
+    assert saved["diagnostics"][0]["finish_reason"] == "MAX_TOKENS"
 
 
 def test_successive_analyses_do_not_share_results(setup):

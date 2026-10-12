@@ -70,8 +70,7 @@ class Source(Record):
     accessed_at: str
 
 
-class Assessment(Record):
-    url: str
+class AssessmentDetails(Record):
     title: str = Field(min_length=1, max_length=300)
     same_property: Literal["probabil", "diferită", "neclar"]
     author: Author
@@ -80,6 +79,23 @@ class Assessment(Record):
     justification: str = Field(min_length=1, max_length=700)
     facts: Facts
     contradictions: list[str] = Field(max_length=8)
+
+
+class Assessment(AssessmentDetails):
+    url: str
+
+
+class APICall(Record):
+    operation: str
+    model: str
+    max_output_tokens: int
+    outcome: Literal["completed", "error"] = "error"
+    finish_reason: str | None = None
+    block_reason: str | None = None
+    http_status: int | None = None
+    prompt_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
 
 
 class Comparison(Record):
@@ -110,3 +126,5 @@ class Analysis(Record):
     search_suggestions_html: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     usage: dict[str, int] = Field(default_factory=dict)
+    diagnostics: list[APICall] = Field(default_factory=list)
+    recovery_hint: str = ""

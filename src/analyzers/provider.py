@@ -1,6 +1,7 @@
 """Provider interface. Concrete SDK/API calls belong exclusively in this module."""
 
-from typing import Protocol
+from typing import Literal, Protocol
+from urllib.parse import urlsplit
 
 import json
 
@@ -10,12 +11,25 @@ from google.genai import errors, types
 from pydantic import ValidationError
 
 from src.config import ConfigurationError, Settings
-from src.models import Comparison, Listing, SearchBatch, SearchHit, Source
+from src.models import APICall, Assessment, AssessmentDetails, Comparison, Listing, Record, SearchBatch, SearchHit, Source
 from src.utils.urls import InvalidURL, canonical_url
 
 
 class ProviderError(RuntimeError):
-    pass
+    def __init__(self, message: str, recovery_hint: str = "Poți reîncerca verificarea."):
+        super().__init__(message)
+        self.recovery_hint = recovery_hint
+
+
+class CandidateAssessment(AssessmentDetails):
+    source_id: str
+
+
+class CandidateComparison(Record):
+    status: Literal["completed", "incomplete"]
+    source_ids: list[str]
+    results: list[CandidateAssessment]
+    limitations: list[str]
 
 
 class Provider(Protocol):
@@ -53,6 +67,7 @@ class GeminiProvider:
             raise ConfigurationError("Lipsește GEMINI_API_KEY. Configurează cheia în fișierul local .env sau în variabilele de mediu.")
         self.settings = settings
         self.usage: dict[str, int] = {}
+        self.diagnostics: list[APICall] = []
         self.client = client or genai.Client(api_key=settings.api_key,
                                             http_options=types.HttpOptions(
                                                 retry_options=types.HttpRetryOptions(attempts=settings.max_attempts)))
@@ -61,6 +76,10 @@ class GeminiProvider:
         self.client.close()
 
     def _generate(self, contents: str, timeout: float, schema=None, search=False):
+        operation = "căutare" if search else ("extragere" if schema is Listing else "comparare")
+        diagnostic = APICall(operation=operation, model=self.settings.model,
+                             max_output_tokens=self.settings.max_output_tokens)
+        self.diagnostics.append(diagnostic)
         config = types.GenerateContentConfig(
             system_instruction=SYSTEM,
             max_output_tokens=self.settings.max_output_tokens,
@@ -80,6 +99,7 @@ class GeminiProvider:
             response = self.client.models.generate_content(model=self.settings.model, contents=contents, config=config)
         except errors.APIError as exc:
             code = getattr(exc, "code", None)
+            diagnostic.http_status = code
             if code in (401, 403):
                 message = "Cheia Gemini nu are acces la serviciu. Verifică cheia și permisiunile proiectului Google."
             elif code == 429:
@@ -93,10 +113,39 @@ class GeminiProvider:
             raise ProviderError("Serviciul Gemini nu poate fi accesat sau a depășit timpul disponibil. Poți reîncerca.") from None
         usage = response.usage_metadata
         if usage:
+            diagnostic.prompt_tokens = usage.prompt_token_count or 0
+            diagnostic.output_tokens = usage.candidates_token_count or 0
+            diagnostic.thinking_tokens = usage.thoughts_token_count or 0
             for field in ("prompt_token_count", "candidates_token_count", "thoughts_token_count", "total_token_count"):
                 self.usage[field] = self.usage.get(field, 0) + (getattr(usage, field, 0) or 0)
-        if not response.candidates or response.candidates[0].finish_reason != types.FinishReason.STOP:
-            raise ProviderError("Gemini a returnat un răspuns incomplet sau blocat. Verificarea nu a fost finalizată.")
+        candidate = response.candidates[0] if response.candidates else None
+        reason = candidate.finish_reason if candidate else None
+        diagnostic.finish_reason = reason.value if reason else None
+        feedback = response.prompt_feedback
+        if feedback and feedback.block_reason:
+            block_reason = feedback.block_reason.value
+            if block_reason not in {"BLOCKED_REASON_UNSPECIFIED", "BLOCK_REASON_UNSPECIFIED"}:
+                diagnostic.block_reason = block_reason
+        if reason == types.FinishReason.MAX_TOKENS:
+            raise ProviderError(
+                f"Gemini a atins limita de {self.settings.max_output_tokens} tokeni în etapa de {operation}. Răspunsul este incomplet.",
+                "Redu MAX_CANDIDATES în .env pentru răspunsuri mai scurte, apoi reîncearcă. Detaliile apelului sunt disponibile mai jos.")
+        if diagnostic.block_reason or reason in {
+            types.FinishReason.SAFETY, types.FinishReason.BLOCKLIST,
+            types.FinishReason.PROHIBITED_CONTENT, types.FinishReason.SPII,
+        }:
+            code = diagnostic.block_reason or diagnostic.finish_reason
+            raise ProviderError(
+                f"Gemini a blocat răspunsul în etapa de {operation} (cod {code}).",
+                "Nu este o concluzie despre existența anunțului. Consultă detaliile apelului; o reîncercare poate avea același rezultat.")
+        if reason == types.FinishReason.RECITATION:
+            raise ProviderError(
+                f"Gemini a oprit răspunsul în etapa de {operation} din cauza reproducerii textului (RECITATION).",
+                "Răspunsul nu poate fi folosit pentru verificare. Detaliile apelului pot fi descărcate mai jos.")
+        if reason != types.FinishReason.STOP:
+            code = diagnostic.finish_reason or "NO_CANDIDATE"
+            raise ProviderError(f"Gemini nu a finalizat etapa de {operation} (cod {code}).")
+        diagnostic.outcome = "completed"
         return response
 
     def _structured(self, task, payload, schema, timeout):
@@ -157,10 +206,15 @@ class GeminiProvider:
                            limitations=["Google Search poate omite anunțuri; sursele inaccesibile rămân neverificate."])
 
     def compare(self, listing: Listing, sources: list[Source], timeout: float) -> Comparison:
-        return self._structured(
-            "Compară anunțul de referință cu FIECARE sursă. Returnează exact un rezultat pentru fiecare URL transmis. "
-            "Setează status=completed doar când ai evaluat toate sursele; source_urls enumeră URL-urile primite. "
-            "Nu genera și nu modifica URL-uri. Separă potrivirea proprietății de clasificarea autorului. "
+        # Google grounding redirect URLs can be thousands of characters long. Keep them
+        # locally and use short IDs instead of asking the model to echo every URL twice.
+        by_id = {f"s{index}": source for index, source in enumerate(sources)}
+        compact = self._structured(
+            "Compară anunțul de referință cu FIECARE sursă. Returnează exact un rezultat pentru fiecare source_id transmis. "
+            "Setează status=completed doar când ai evaluat toate sursele; source_ids enumeră identificatorii primiți. "
+            "Nu genera URL-uri. Separă potrivirea proprietății de clasificarea autorului. "
+            "Fii concis: titluri scurte, justificare de maximum 30 de cuvinte; "
+            "maximum două citate scurte și relevante per listă de dovezi. Nu repeta descrierea integrală. "
             "Citatele evidence și author_evidence trebuie să apară EXACT în textul sursei candidate. "
             "Nu folosi citate din anunțul de referință ca dovezi pentru candidat. "
             "Prețurile pot fi diferite. Caracteristicile absente nu sunt contradicții. "
@@ -170,5 +224,15 @@ class GeminiProvider:
             "nu este el însuși proprietar. Dacă access=snippet, informația este un rezumat al căutării "
             "și nu o pagină verificată. Justificarea trebuie să fie o singură propoziție, cu limitările reale.",
             {"reference": listing.model_dump(mode="json"),
-             "sources": [{"url": item.url, "text": item.text, "access": item.access} for item in sources]},
-            Comparison, timeout)
+             "sources": [{"source_id": source_id, "title": item.title,
+                          "domain": urlsplit(item.final_url or item.url).hostname,
+                          "text": item.text, "access": item.access} for source_id, item in by_id.items()]},
+            CandidateComparison, timeout)
+        returned = [item.source_id for item in compact.results]
+        if (len(returned) != len(set(returned)) or set(returned) != set(by_id)
+                or len(compact.source_ids) != len(set(compact.source_ids)) or set(compact.source_ids) != set(by_id)):
+            raise ProviderError("Gemini a returnat identificatori de surse necunoscuți, duplicați sau lipsă.")
+        return Comparison(status=compact.status, source_urls=[source.url for source in sources],
+                          results=[Assessment(url=by_id[item.source_id].url,
+                                              **item.model_dump(exclude={"source_id"})) for item in compact.results],
+                          limitations=compact.limitations)

@@ -178,8 +178,13 @@ class Workflow:
             # Validation errors may contain source text; do not echo raw model payloads.
             report.message = ("Serviciul AI a returnat un răspuns incomplet sau invalid. Poți reîncerca."
                               if isinstance(exc, ValidationError) else str(exc))
+            if isinstance(exc, ProviderError):
+                report.recovery_hint = exc.recovery_hint
+            elif isinstance(exc, PageError) and report.original is None:
+                report.recovery_hint = "Copiază descrierea anunțului în câmpul alternativ și pornește din nou verificarea."
         finally:
             report.usage = {**self.provider.usage, "ai_calls": calls}
+            report.diagnostics = list(getattr(self.provider, "diagnostics", []))
             report.limitations = list(dict.fromkeys(report.limitations))
             progress(100, "Verificare încheiată.")
         return report
