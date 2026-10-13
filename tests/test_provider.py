@@ -109,6 +109,7 @@ def test_user_reported_thinking_exhaustion_has_correct_recovery_and_no_retry():
     assert "MAX_CANDIDATES" not in error.value.recovery_hint
     assert client.models.generate_content.call_count == 1
     assert provider.diagnostics[-1].operation == "comparare"
+    assert provider.diagnostics[-1].source_count == 1
     assert provider.diagnostics[-1].finish_reason == "MAX_TOKENS"
     assert provider.diagnostics[-1].thinking_tokens == 2876
     assert provider.diagnostics[-1].output_tokens == 105

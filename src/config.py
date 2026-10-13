@@ -18,14 +18,16 @@ class Settings:
     model: str = "gemini-3.6-flash"
     thinking_level: str = "medium"
     api_key: str = field(default="", repr=False)
-    analysis_seconds: int = 150
+    analysis_seconds: int = 600
     http_seconds: int = 12
     max_page_bytes: int = 2_000_000
-    max_input_chars: int = 12000
-    max_candidate_chars: int = 7000
-    max_candidates: int = 6
-    max_searches: int = 2
-    max_ai_calls: int = 5
+    max_input_chars: int = 16000
+    max_candidate_chars: int = 8000
+    max_candidates: int = 20
+    max_searches: int = 6
+    max_ai_calls: int = 20
+    comparison_batch_size: int = 3
+    search_results_per_call: int = 8
     max_output_tokens: int = 8192
     max_attempts: int = 1
     journal_dir: Path = ROOT / "local_data"
@@ -35,10 +37,12 @@ class Settings:
         load_dotenv(ROOT / ".env", override=False)
         values = {}
         bounds = {
-            "analysis_seconds": (30, 300), "http_seconds": (3, 30),
-            "max_input_chars": (1000, 16000), "max_candidate_chars": (1000, 8000),
-            "max_candidates": (1, 8), "max_searches": (1, 2),
-            "max_ai_calls": (2, 5), "max_output_tokens": (1000, 16384),
+            "analysis_seconds": (30, 1200), "http_seconds": (3, 30),
+            "max_input_chars": (1000, 32000), "max_candidate_chars": (1000, 16000),
+            "max_candidates": (1, 60), "max_searches": (1, 6),
+            "max_ai_calls": (2, 40), "max_output_tokens": (1000, 16384),
+            "comparison_batch_size": (1, 4),
+            "search_results_per_call": (1, 12),
         }
         for field, (low, high) in bounds.items():
             raw = os.getenv(field.upper())

@@ -90,6 +90,7 @@ class APICall(Record):
     model: str
     max_output_tokens: int
     thinking_level: str | None = None
+    source_count: int | None = None
     outcome: Literal["completed", "error"] = "error"
     finish_reason: str | None = None
     block_reason: str | None = None
@@ -129,3 +130,6 @@ class Analysis(Record):
     usage: dict[str, int] = Field(default_factory=dict)
     diagnostics: list[APICall] = Field(default_factory=list)
     recovery_hint: str = ""
+    limited: bool = False
+    limit_reason: str = ""
+    coverage: dict[str, int] = Field(default_factory=dict)

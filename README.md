@@ -85,8 +85,11 @@ sursele sunt în
    descrierea. Dacă pagina este blocată, copiază descrierea în câmpul alternativ.
 3. Dacă autorul anunțului introdus se declară proprietar, căutarea se oprește imediat.
    Pentru input manual, aplicația precizează că declarația nu a fost verificată pe site.
-4. Altfel, caută expresii exacte, apoi o variantă mai scurtă și caracteristici fără
-   diacritice. Prețul nu este obligatoriu în căutări și nu exclude singur o potrivire.
+4. Altfel, încearcă până la șase variante: fragmente exacte, un alt fragment fără
+   filtre suplimentare, variante fără diacritice, fragmente scurtate, caracteristici
+   și o căutare țintită pe Facebook public. Prețul nu este obligatoriu în căutări
+   și nu exclude singur o potrivire. Fără fragmente distinctive se folosesc doar
+   variante bazate pe caracteristicile disponibile.
 5. Primești linkuri justificate sau una dintre stările:
    - „Am găsit posibile anunțuri ale proprietarului.”
    - „Nu am găsit un anunț al proprietarului în sursele verificate.”
@@ -118,6 +121,11 @@ ca fiind în afara fluxului de vânzare. Nu se accesează conturi sau grupuri pr
 - O potrivire verificată poate fi afișată chiar dacă alte pagini sunt inaccesibile,
   cu precizarea limitării. Fără potriviri și cu surse relevante neverificabile, starea
   este incompletă. Absența rezultatelor nu înseamnă că anunțul nu există.
+- La atingerea plafonului de candidați, apeluri, timp sau variante de căutare,
+  fără o potrivire verificată, starea este incompletă: „Căutarea a fost limitată;
+  pot exista surse relevante neverificate.” Nu este afișat un fals rezultat negativ.
+  Poți mări plafonul indicat și relua analiza; reluarea pornește o nouă verificare,
+  fără a reutiliza apelurile vechi, și poate genera costuri noi.
 - Nu se atribuie procente, nu se confirmă dreptul de proprietate și nu se declară
   un „anunț original” pe baza datei mai vechi.
 
@@ -127,16 +135,24 @@ Configurația este centralizată în `src/config.py`; `.env.example` arată supr
 
 | Setare | Implicit | Rol |
 | --- | ---: | --- |
-| `ANALYSIS_SECONDS` | 150 | Bugetul de timp al fluxului și timeoutul rămas pentru API |
+| `ANALYSIS_SECONDS` | 600 | Bugetul de timp al fluxului și timeoutul rămas pentru API; maxim 1200 |
 | `HTTP_SECONDS` | 12 | Timeout pentru accesarea unei pagini |
-| `MAX_INPUT_CHARS` | 12000 | Limita descrierii de intrare |
-| `MAX_CANDIDATE_CHARS` | 7000 | Text transmis pentru fiecare candidat |
-| `MAX_CANDIDATES` | 6 | Numărul total de pagini candidate accesate |
-| `MAX_SEARCHES` | 2 | Maximum două apeluri Gemini cu Google Search |
-| `MAX_AI_CALLS` | 5 | Extragere + căutare/comparare în cel mult două runde |
+| `MAX_INPUT_CHARS` | 16000 | Limita descrierii de intrare; maxim 32000 |
+| `MAX_CANDIDATE_CHARS` | 8000 | Text transmis pentru fiecare candidat; maxim 16000 |
+| `MAX_CANDIDATES` | 20 | Numărul total de pagini candidate încercate; maxim 60 |
+| `MAX_SEARCHES` | 6 | Maximum șase variante/apeluri Gemini cu Google Search |
+| `SEARCH_RESULTS_PER_CALL` | 8 | Numărul de rezultate cerut per apel de căutare; maxim 12 |
+| `MAX_AI_CALLS` | 20 | Plafon comun pentru extragere, căutări și toate loturile de comparație; maxim 40 |
+| `COMPARISON_BATCH_SIZE` | 3 | Cel mult trei surse comparate într-un apel; configurabil între 1 și 4 |
 | `MAX_OUTPUT_TOKENS` | 8192 | Plafon total per apel, inclusiv tokenii de gândire; configurabil între 1000 și 16384 |
 
 O singură încercare per apel (`HttpRetryOptions(attempts=1)`), fără retry automat.
+Candidații sunt citiți și comparați progresiv, în loturi mici. Aplicația se oprește
+după un lot cu potriviri verificate, înainte de a citi următorul lot sau de a începe
+următoarea variantă de căutare. Limita lotului nu reduce plafonul total de candidați.
+Metadatele Google pot conține mai multe surse decât numărul cerut; programul respectă
+plafonul total `MAX_CANDIDATES`. Nivelurile mai mari de acoperire pot implica mai
+multe apeluri și costuri decât configurația anterioară.
 Modelul primește explicit `thinking_level=MEDIUM` prin SDK. Nivelul de gândire
 nu este un număr fix de tokeni și poate crește consumul și durata. Plafonul de
 8.192 de tokeni include gândirea: dacă este epuizat, diagnosticul arată `MAX_TOKENS`
@@ -199,6 +215,9 @@ refuzul colaborării cu agenții, copii de agregator, input manual după o pagin
 inaccesibilă, erori API, două analize succesive, citate/URL-uri fabricate,
 limitele de apeluri, jurnalizarea și interfața. Un transport HTTP simulat verifică
 și serializarea cererilor prin SDK-ul Google instalat.
+Sunt verificate și găsirea unui candidat după primii șase, o potrivire într-o
+variantă de căutare ulterioară, loturile de cel mult trei surse, oprirea timpurie
+și raportarea plafonului în locul unei concluzii negative.
 
 **Aceste teste nu validează calitatea semantică a Gemini sau accesul la API.**
 Testul real este omis implicit. Pentru un singur apel real de căutare, care poate
@@ -244,6 +263,10 @@ trunchiere. Setările explicite din `.env` sunt păstrate la actualizare: dacă 
 
 Un `.env` care conține doar `GEMINI_API_KEY` este valid: celelalte valori au
 implicite în `src/config.py`. Nu este necesar să suprascrii cheia când actualizezi aplicația.
+Valorile vechi scrise explicit (de exemplu `MAX_SEARCHES=2` și `MAX_AI_CALLS=5`)
+continuă să se aplice. Pentru profilul mai amplu, copiază valorile din
+`.env.example` în `.env`, păstrând cheia reală. Aplicația arată numărul căutărilor,
+paginilor încercate și surselor comparate, inclusiv în diagnosticul descărcabil.
 
 ## Limite cunoscute
 

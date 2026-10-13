@@ -71,6 +71,9 @@ if report := st.session_state.get("report"):
                     "checked_at": report.checked_at,
                     "calls": [call.model_dump(mode="json") for call in report.diagnostics],
                     "usage": report.usage,
+                    "coverage": report.coverage,
+                    "limited": report.limited,
+                    "limit_reason": report.limit_reason,
                 }
                 st.json(diagnostic_data)
                 st.download_button("Descarcă diagnosticul", json.dumps(diagnostic_data, ensure_ascii=False, indent=2),
@@ -105,6 +108,10 @@ if report := st.session_state.get("report"):
                 for source in pending_sources:
                     st.link_button(source.title or "Deschide sursa", source.final_url or source.url)
     st.caption("«Proprietar declarat» descrie afirmația autorului, fără verificarea dreptului de proprietate.")
+    if report.coverage and report.original:
+        st.caption(f"Verificare: {report.coverage.get('completed_searches', 0)} variante de căutare, "
+                   f"{report.coverage.get('candidate_pages_attempted', 0)} pagini candidate încercate, "
+                   f"{report.coverage.get('sources_compared', 0)} surse comparate.")
     if report.limitations:
         with st.expander("Limitele acestei verificări"):
             for limitation in report.limitations:

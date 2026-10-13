@@ -71,3 +71,20 @@ plafonul de 3.000: 2.876 tokeni de gândire și doar 105 tokeni de răspuns. Rem
 pentru păstrarea nivelului `medium` este un plafon mai mare, nu un retry automat.
 Acesta permite un consum mai mare, fără a fi o garanție de finalizare. Limitele
 de apeluri și timp continuă să fie aplicate.
+
+## Acoperire progresivă
+
+Programul construiește până la șase variante distincte de căutare, de la citate
+exacte la fragmente scurtate, texte fără diacritice, caracteristici și Facebook public.
+Profilul implicit permite 20 de pagini candidate, 6 apeluri de căutare, 20 de
+apeluri AI în total și 600 de secunde. Comparațiile au maximum 3 surse per apel.
+Solicitarea către Google cere până la 8 rezultate concise per căutare; metadatele
+primite sunt totuși supuse plafonului total de pagini și deduplicării locale.
+Toate loturile consumă același buget de timp și apeluri. O potrivire verificată
+oprește citirea loturilor și căutărilor următoare.
+
+Fără potrivire, atingerea unui plafon devine rezultat incomplet, cu motivul și
+acoperirea observată în jurnal. Absența unei potriviri după toate variantele
+planificate, fără surse relevante neclarificate sau oprire la plafon, permite
+concluzia negativă limitată la sursele verificate. Aceste mecanisme sunt testate
+cu răspunsuri simulate; nu stabilesc rata de găsire a anunțurilor reale.
