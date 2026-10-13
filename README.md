@@ -134,12 +134,12 @@ Configurația este centralizată în `src/config.py`; `.env.example` arată supr
 | `MAX_CANDIDATES` | 6 | Numărul total de pagini candidate accesate |
 | `MAX_SEARCHES` | 2 | Maximum două apeluri Gemini cu Google Search |
 | `MAX_AI_CALLS` | 5 | Extragere + căutare/comparare în cel mult două runde |
-| `MAX_OUTPUT_TOKENS` | 3000 | Plafon total per apel, inclusiv tokenii de gândire |
+| `MAX_OUTPUT_TOKENS` | 8192 | Plafon total per apel, inclusiv tokenii de gândire; configurabil între 1000 și 16384 |
 
 O singură încercare per apel (`HttpRetryOptions(attempts=1)`), fără retry automat.
 Modelul primește explicit `thinking_level=MEDIUM` prin SDK. Nivelul de gândire
 nu este un număr fix de tokeni și poate crește consumul și durata. Plafonul de
-3.000 de tokeni include gândirea: dacă este epuizat, diagnosticul arată `MAX_TOKENS`
+8.192 de tokeni include gândirea: dacă este epuizat, diagnosticul arată `MAX_TOKENS`
 și tokenii de gândire raportați. Pentru a reduce consumul de raționament poți seta
 `GEMINI_THINKING_LEVEL=low`; modificarea `MAX_OUTPUT_TOKENS` trebuie făcută în
 cunoștință de cauză, deoarece permite răspunsuri mai costisitoare.
@@ -232,9 +232,15 @@ găsite rămân accesibile separat ca surse cu comparația nefinalizată.
 Comparația folosește identificatori scurți (`s0`, `s1` etc.), reconectați la URL-urile
 reale de către program. Linkurile lungi de redirecționare Google nu mai sunt cerute
 în răspunsul JSON. Aceasta reduce consumul fără creșterea plafonului de tokeni sau
-apeluri. Dacă eroarea confirmată este `MAX_TOKENS`, poți reduce `MAX_CANDIDATES=3`
-în `.env` și reîncerca; vor fi verificate mai puține surse. Nu presupune că orice
-blocaj Gemini este cauzat de limita de tokeni.
+apeluri. Dacă eroarea confirmată este `MAX_TOKENS`, verifică tokenii de gândire și
+tokenii de răspuns din diagnostic. Cu `medium`, un plafon de 3.000 poate fi consumat
+aproape integral de gândire înainte de generarea rezultatului JSON. Pentru a păstra
+`medium`, setează `MAX_OUTPUT_TOKENS=8192` în `.env`. Plafonul nu este un consum
+obligatoriu, dar permite un consum mai mare; rezultatul real trebuie reverificat.
+Poți seta `GEMINI_THINKING_LEVEL=low` pentru a reduce raționamentul sau
+`MAX_CANDIDATES=3` pentru a verifica mai puține surse. Nu există retry automat după
+trunchiere. Setările explicite din `.env` sunt păstrate la actualizare: dacă ai
+`MAX_OUTPUT_TOKENS=3000`, editează această linie și repornește aplicația.
 
 Un `.env` care conține doar `GEMINI_API_KEY` este valid: celelalte valori au
 implicite în `src/config.py`. Nu este necesar să suprascrii cheia când actualizezi aplicația.

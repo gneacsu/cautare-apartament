@@ -26,7 +26,7 @@ class Settings:
     max_candidates: int = 6
     max_searches: int = 2
     max_ai_calls: int = 5
-    max_output_tokens: int = 3000
+    max_output_tokens: int = 8192
     max_attempts: int = 1
     journal_dir: Path = ROOT / "local_data"
 
@@ -38,7 +38,7 @@ class Settings:
             "analysis_seconds": (30, 300), "http_seconds": (3, 30),
             "max_input_chars": (1000, 16000), "max_candidate_chars": (1000, 8000),
             "max_candidates": (1, 8), "max_searches": (1, 2),
-            "max_ai_calls": (2, 5), "max_output_tokens": (1000, 5000),
+            "max_ai_calls": (2, 5), "max_output_tokens": (1000, 16384),
         }
         for field, (low, high) in bounds.items():
             raw = os.getenv(field.upper())

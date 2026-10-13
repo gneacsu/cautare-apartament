@@ -126,9 +126,19 @@ class GeminiProvider:
             if block_reason not in {"BLOCKED_REASON_UNSPECIFIED", "BLOCK_REASON_UNSPECIFIED"}:
                 diagnostic.block_reason = block_reason
         if reason == types.FinishReason.MAX_TOKENS:
+            thinking_detail = (f" Tokeni de gândire raportați: {diagnostic.thinking_tokens}; "
+                               f"tokeni de răspuns: {diagnostic.output_tokens}.") if diagnostic.thinking_tokens else ""
+            if self.settings.max_output_tokens < 8192:
+                hint = (f"Pentru a păstra nivelul de gândire {self.settings.thinking_level}, "
+                        "setează MAX_OUTPUT_TOKENS=8192 în .env și repornește aplicația. "
+                        "Acesta este un plafon per apel, nu un consum obligatoriu; poate permite un consum mai mare.")
+            else:
+                hint = ("Plafonul include și gândirea. Poți crește MAX_OUTPUT_TOKENS până la 16384, cu posibil consum mai mare, "
+                        "sau reduce GEMINI_THINKING_LEVEL la low pentru a limita raționamentul. Repornește după editarea .env.")
             raise ProviderError(
-                f"Gemini a atins limita de {self.settings.max_output_tokens} tokeni în etapa de {operation}. Răspunsul este incomplet.",
-                "Redu MAX_CANDIDATES în .env pentru răspunsuri mai scurte, apoi reîncearcă. Detaliile apelului sunt disponibile mai jos.")
+                f"Gemini a atins limita de {self.settings.max_output_tokens} tokeni în etapa de {operation}. Răspunsul este incomplet."
+                + thinking_detail,
+                hint)
         if diagnostic.block_reason or reason in {
             types.FinishReason.SAFETY, types.FinishReason.BLOCKLIST,
             types.FinishReason.PROHIBITED_CONTENT, types.FinishReason.SPII,

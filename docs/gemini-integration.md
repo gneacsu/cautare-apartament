@@ -63,3 +63,11 @@ Sugestiile oficiale din `search_entry_point.rendered_content` sunt afișate în 
 Fiecare apel înregistrează etapa, modelul, nivelul de gândire, limita, utilizarea raportată, `finish_reason` și
 eventualul `prompt_feedback.block_reason`, fără răspunsul brut sau cheia API.
 Răspunsurile trunchiate/blocate rămân respinse, cu explicații distincte în interfață.
+
+Plafonul implicit este 8.192 de tokeni per apel, configurabil între 1.000 și 16.384.
+Include tokenii de gândire, deci nu garantează 8.192 de tokeni de text final.
+Un diagnostic real furnizat de utilizator a arătat `MAX_TOKENS` la comparație cu
+plafonul de 3.000: 2.876 tokeni de gândire și doar 105 tokeni de răspuns. Remediul
+pentru păstrarea nivelului `medium` este un plafon mai mare, nu un retry automat.
+Acesta permite un consum mai mare, fără a fi o garanție de finalizare. Limitele
+de apeluri și timp continuă să fie aplicate.

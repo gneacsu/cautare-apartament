@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from unittest.mock import Mock
 
 import httpx
@@ -92,6 +93,25 @@ def test_truncated_response_is_error():
     assert provider.diagnostics[-1].finish_reason == "MAX_TOKENS"
     assert provider.diagnostics[-1].operation == "extragere"
     assert provider.diagnostics[-1].outcome == "error"
+
+
+def test_user_reported_thinking_exhaustion_has_correct_recovery_and_no_retry():
+    output = response('{"status":', finish=types.FinishReason.MAX_TOKENS)
+    output.usage_metadata = types.GenerateContentResponseUsageMetadata(
+        prompt_token_count=2923, candidates_token_count=105, thoughts_token_count=2876)
+    provider, client = provider_with(output)
+    provider.settings = replace(provider.settings, max_output_tokens=3000)
+    source = Source(url=URL, text=TEXT, access="page", accessed_at="2026-10-13")
+    with pytest.raises(ProviderError) as error:
+        provider.compare(listing(), [source], 10)
+    assert "2876" in str(error.value) and "105" in str(error.value)
+    assert "MAX_OUTPUT_TOKENS=8192" in error.value.recovery_hint
+    assert "MAX_CANDIDATES" not in error.value.recovery_hint
+    assert client.models.generate_content.call_count == 1
+    assert provider.diagnostics[-1].operation == "comparare"
+    assert provider.diagnostics[-1].finish_reason == "MAX_TOKENS"
+    assert provider.diagnostics[-1].thinking_tokens == 2876
+    assert provider.diagnostics[-1].output_tokens == 105
 
 
 @pytest.mark.parametrize("reason", [types.FinishReason.SAFETY, types.FinishReason.RECITATION,
