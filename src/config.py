@@ -15,7 +15,8 @@ class ConfigurationError(ValueError):
 
 @dataclass(frozen=True)
 class Settings:
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-3.6-flash"
+    thinking_level: str = "medium"
     api_key: str = field(default="", repr=False)
     analysis_seconds: int = 150
     http_seconds: int = 12
@@ -53,4 +54,7 @@ class Settings:
         values["model"] = os.getenv("GEMINI_MODEL", cls.model).strip()
         if not values["model"]:
             raise ConfigurationError("GEMINI_MODEL nu poate fi gol.")
+        values["thinking_level"] = os.getenv("GEMINI_THINKING_LEVEL", cls.thinking_level).strip().lower()
+        if values["thinking_level"] not in {"minimal", "low", "medium", "high"}:
+            raise ConfigurationError("GEMINI_THINKING_LEVEL trebuie să fie minimal, low, medium sau high.")
         return cls(**values)

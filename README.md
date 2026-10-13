@@ -52,8 +52,17 @@ streamlit run app.py
    gratuit, a modelelor și a Google Search depinde de oferta și contul Google.
 4. Pune cheia în `GEMINI_API_KEY` din `.env` sau în variabila de mediu cu același nume.
    Variabilele deja existente au prioritate față de `.env`.
-5. Modelul implicit este `gemini-2.5-flash`, configurabil prin `GEMINI_MODEL`.
-   Verifică disponibilitatea lui în proiectul tău înaintea utilizării reale.
+5. Modelul implicit este `gemini-3.6-flash`, cu nivel de gândire `medium`.
+   Pentru configurare explicită, adaugă în `.env`:
+
+   ```env
+   GEMINI_MODEL=gemini-3.6-flash
+   GEMINI_THINKING_LEVEL=medium
+   ```
+
+   Nivelurile acceptate sunt `minimal`, `low`, `medium`, `high`. Repornește aplicația
+   după modificarea `.env`. O variabilă de mediu existentă are prioritate față de fișier.
+   Verifică disponibilitatea modelului în proiectul tău înaintea utilizării reale.
 
 Un abonament pentru aplicația Gemini nu dovedește acces sau credit pentru API.
 Utilizarea poate include costuri pentru tokenii de intrare/ieșire și pentru
@@ -63,9 +72,9 @@ Consultă [tarifele Google](https://ai.google.dev/gemini-api/docs/pricing) și
 facturării. Nu există un buget financiar aprobat sau un plafon monetar implementat.
 Limitele tehnice de mai jos reduc consumul, dar nu garantează un cost fix.
 
-La implementare, pagina de tarife `ai.google.dev` nu a putut fi citită din rețeaua
-cloud. Nu includem tarife numerice neverificate. Documentația SDK și exemplele
-oficiale Google au fost consultate pe GitHub; sursele sunt în
+Nu includem tarife numerice neverificate. Modelul și nivelul de gândire au fost
+verificate în documentația oficială Google, iar contractul SDK în referința API;
+sursele sunt în
 [docs/gemini-integration.md](docs/gemini-integration.md).
 
 ## Utilizare
@@ -125,11 +134,16 @@ Configurația este centralizată în `src/config.py`; `.env.example` arată supr
 | `MAX_CANDIDATES` | 6 | Numărul total de pagini candidate accesate |
 | `MAX_SEARCHES` | 2 | Maximum două apeluri Gemini cu Google Search |
 | `MAX_AI_CALLS` | 5 | Extragere + căutare/comparare în cel mult două runde |
-| `MAX_OUTPUT_TOKENS` | 3000 | Maximum tokeni de ieșire per apel |
+| `MAX_OUTPUT_TOKENS` | 3000 | Plafon total per apel, inclusiv tokenii de gândire |
 
 O singură încercare per apel (`HttpRetryOptions(attempts=1)`), fără retry automat.
-Pentru modelul implicit, `thinking_budget=0` dezactivează gândirea suplimentară.
-Alte modele nu primesc acest parametru specific. Descărcările sunt limitate la 2 MB
+Modelul primește explicit `thinking_level=MEDIUM` prin SDK. Nivelul de gândire
+nu este un număr fix de tokeni și poate crește consumul și durata. Plafonul de
+3.000 de tokeni include gândirea: dacă este epuizat, diagnosticul arată `MAX_TOKENS`
+și tokenii de gândire raportați. Pentru a reduce consumul de raționament poți seta
+`GEMINI_THINKING_LEVEL=low`; modificarea `MAX_OUTPUT_TOKENS` trebuie făcută în
+cunoștință de cauză, deoarece permite răspunsuri mai costisitoare.
+Descărcările sunt limitate la 2 MB
 per pagină și cel mult trei redirecționări. Nu există căutare în fundal sau buclă nelimitată.
 
 **Un apel Google Search poate declanșa mai multe interogări interne.** API-ul folosit

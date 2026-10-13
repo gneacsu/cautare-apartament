@@ -42,6 +42,9 @@ def test_structured_response_uses_schema_and_separate_call():
     assert config.http_options.timeout == 10000
     assert config.http_options.retry_options.attempts == 1
     assert config.max_output_tokens == Settings().max_output_tokens
+    assert client.models.generate_content.call_args.kwargs["model"] == "gemini-3.6-flash"
+    assert config.thinking_config.thinking_level == types.ThinkingLevel.MEDIUM
+    assert config.thinking_config.thinking_budget is None
 
 
 def test_urls_only_from_grounding_metadata():
@@ -58,6 +61,7 @@ def test_urls_only_from_grounding_metadata():
     config = client.models.generate_content.call_args.kwargs["config"]
     assert config.tools[0].google_search is not None
     assert config.response_mime_type is None
+    assert config.thinking_config.thinking_level == types.ThinkingLevel.MEDIUM
 
 
 def test_no_search_metadata_is_error_not_empty_results():
@@ -165,6 +169,7 @@ def test_diagnostics_exclude_key_and_listing_text():
     assert TEXT not in serialized
     assert "api_key" not in serialized
     assert provider.diagnostics[-1].output_tokens == 30
+    assert provider.diagnostics[-1].thinking_level == "medium"
 
 
 def test_network_error_is_sanitized():
@@ -191,6 +196,11 @@ def test_sdk_serialization_with_mock_http():
             provider.extract(TEXT, 5)
     assert captured[0]["generationConfig"]["responseMimeType"] == "application/json"
     assert captured[0]["generationConfig"]["responseJsonSchema"]["properties"]["title"]
+    # This SDK retains snake_case for nested ThinkingConfig fields. Validate the
+    # actual transmitted value through its schema instead of assuming camelCase.
+    thinking = types.ThinkingConfig.model_validate(captured[0]["generationConfig"]["thinkingConfig"])
+    assert thinking.thinking_level == types.ThinkingLevel.MEDIUM
+    assert thinking.thinking_budget is None
     assert provider.usage["total_token_count"] == 30
 
 
@@ -211,3 +221,6 @@ def test_sdk_serializes_compact_comparison_and_restores_url():
     assert result.results[0].url == long_url
     assert "source_ids" in captured[0]["generationConfig"]["responseJsonSchema"]["properties"]
     assert long_url not in json.dumps(captured[0])
+    thinking = types.ThinkingConfig.model_validate(captured[0]["generationConfig"]["thinkingConfig"])
+    assert thinking.thinking_level == types.ThinkingLevel.MEDIUM
+    assert thinking.thinking_budget is None

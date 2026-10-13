@@ -78,18 +78,17 @@ class GeminiProvider:
     def _generate(self, contents: str, timeout: float, schema=None, search=False):
         operation = "căutare" if search else ("extragere" if schema is Listing else "comparare")
         diagnostic = APICall(operation=operation, model=self.settings.model,
-                             max_output_tokens=self.settings.max_output_tokens)
+                             max_output_tokens=self.settings.max_output_tokens,
+                             thinking_level=self.settings.thinking_level)
         self.diagnostics.append(diagnostic)
         config = types.GenerateContentConfig(
             system_instruction=SYSTEM,
             max_output_tokens=self.settings.max_output_tokens,
             candidate_count=1,
+            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel(self.settings.thinking_level.upper())),
             http_options=types.HttpOptions(timeout=max(1, int(timeout * 1000)),
                                            retry_options=types.HttpRetryOptions(attempts=self.settings.max_attempts)),
         )
-        # This model documents optional thinking; do not send model-specific settings to others.
-        if self.settings.model == "gemini-2.5-flash":
-            config.thinking_config = types.ThinkingConfig(thinking_budget=0)
         if search:
             config.tools = [types.Tool(google_search=types.GoogleSearch())]
         else:

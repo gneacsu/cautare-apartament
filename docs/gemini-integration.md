@@ -2,14 +2,20 @@
 
 Verificare documentară: 12 octombrie 2026. Furnizor ales de utilizator: Google Gemini.
 Implementarea folosește SDK-ul oficial `google-genai==1.75.0`, API `generateContent`.
+Model implicit: `gemini-3.6-flash`, cu `GEMINI_THINKING_LEVEL=medium`.
 
 ## Surse oficiale consultate
 
+- [Gemini 3.6 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash):
+  identificatorul modelului este `gemini-3.6-flash`.
+- [Thinking](https://ai.google.dev/gemini-api/docs/thinking): Gemini 3.6 Flash acceptă
+  `minimal`, `low`, `medium`, `high`; plafonul de tokeni include și gândirea.
+- [Referința generateContent](https://ai.google.dev/api/generate-content):
+  `generationConfig.thinkingConfig.thinkingLevel`, enum `MEDIUM`.
 - [Documentația SDK, sursa oficială](https://github.com/googleapis/python-genai/blob/main/docs/_sources/index.rst.txt):
   `client.models.generate_content`, `response_json_schema`, configurarea clientului.
 - [Exemplul oficial Google Search pentru generateContent](https://github.com/google-gemini/cookbook/blob/archive/generate-content-api/quickstarts/Search_Grounding.ipynb):
-  `tools=[{"google_search": {}}]`, `grounding_metadata`, sursele și sugestiile de căutare;
-  `gemini-2.5-flash` este inclus în lista de modele a exemplului.
+  `tools=[{"google_search": {}}]`, `grounding_metadata`, sursele și sugestiile de căutare.
 - [Exemplul oficial pentru JSON](https://github.com/google-gemini/cookbook/blob/archive/generate-content-api/quickstarts/JSON_mode.ipynb).
 - [Ghidul actual Google Search](https://github.com/google-gemini/cookbook/blob/main/quickstarts/Search_Grounding.ipynb)
   și [JSON](https://github.com/google-gemini/cookbook/blob/main/quickstarts/JSON_mode.ipynb):
@@ -17,10 +23,9 @@ Implementarea folosește SDK-ul oficial `google-genai==1.75.0`, API `generateCon
   Aplicația nu amestecă parametrii celor două API-uri.
 - Tipurile SDK instalat, disponibile și în [sursa oficială](https://github.com/googleapis/python-genai/blob/main/google/genai/types.py):
   `HttpOptions.timeout` este în milisecunde; `HttpRetryOptions.attempts` include prima
-  încercare; `ThinkingConfig.thinking_budget=0` înseamnă dezactivare pentru modelele compatibile.
+  încercare; `ThinkingConfig.thinking_level=ThinkingLevel.MEDIUM` configurează nivelul cerut.
 
-Paginile `ai.google.dev` pentru prețuri/modele/ghiduri au fost blocate de proxy-ul
-mediului. Documentația GitHub și tipurile SDK sunt dovezi de contract, nu dovadă
+Documentația Google și tipurile SDK sunt dovezi de contract, nu dovadă
 că un model este disponibil pentru contul utilizatorului la momentul rulării.
 [Tarifele](https://ai.google.dev/gemini-api/docs/pricing) trebuie verificate înaintea
 activării facturării. Nu au fost folosite chei și nu au fost efectuate apeluri reale.
@@ -55,6 +60,6 @@ Timeouturile și limitele de tokeni nu confirmă finalizarea semantică: răspun
 este acceptat numai cu `finish_reason=STOP` și validarea completă a structurii.
 Sugestiile oficiale din `search_entry_point.rendered_content` sunt afișate în iframe.
 
-Fiecare apel înregistrează etapa, limita, utilizarea raportată, `finish_reason` și
+Fiecare apel înregistrează etapa, modelul, nivelul de gândire, limita, utilizarea raportată, `finish_reason` și
 eventualul `prompt_feedback.block_reason`, fără răspunsul brut sau cheia API.
 Răspunsurile trunchiate/blocate rămân respinse, cu explicații distincte în interfață.

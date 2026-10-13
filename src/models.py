@@ -89,6 +89,7 @@ class APICall(Record):
     operation: str
     model: str
     max_output_tokens: int
+    thinking_level: str | None = None
     outcome: Literal["completed", "error"] = "error"
     finish_reason: str | None = None
     block_reason: str | None = None
