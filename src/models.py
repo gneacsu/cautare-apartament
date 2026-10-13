@@ -58,6 +58,7 @@ class SearchBatch(Record):
     limitations: list[str] = Field(default_factory=list)
     executed_queries: list[str] = Field(default_factory=list)
     search_suggestions_html: str = ""
+    next_start: int | None = None
 
 
 class Source(Record):
@@ -67,6 +68,9 @@ class Source(Record):
     text: str = ""
     access: Literal["page", "snippet", "unavailable", "manual"]
     error: str | None = None
+    images: list[str] = Field(default_factory=list)
+    image_matches: list["ImageMatch"] = Field(default_factory=list)
+    links: list[str] = Field(default_factory=list)
     accessed_at: str
 
 
@@ -133,3 +137,67 @@ class Analysis(Record):
     limited: bool = False
     limit_reason: str = ""
     coverage: dict[str, int] = Field(default_factory=dict)
+    checkpoint: "Checkpoint | None" = None
+    search_calls: list["SearchCall"] = Field(default_factory=list)
+
+
+class SearchTask(Record):
+    query: str
+    category: str
+    start: int = 0
+    depth: int = 0
+    done: bool = False
+    error: str = ""
+
+
+class SearchCall(Record):
+    provider: str = "SerpApi"
+    query: str
+    start: int = 0
+    outcome: str = "error"
+    http_status: int | None = None
+    result_count: int = 0
+    elapsed_seconds: float = 0
+
+
+class Candidate(Record):
+    link_depth: int = 0
+    url: str
+    title: str = ""
+    snippet: str = ""
+    discovered_by: list[str] = Field(default_factory=list)
+    state: Literal["pending", "read", "evaluated", "unavailable", "duplicate"] = "pending"
+    error: str = ""
+    manual_text: str = ""
+    manual_images: list["ImageSignature"] = Field(default_factory=list)
+
+
+class ImageSignature(Record):
+    url: str
+    sha256: str
+    dhash: str
+    width: int
+    height: int
+
+
+class ImageMatch(Record):
+    reference_url: str
+    candidate_url: str
+    kind: Literal["identical", "similar"]
+
+
+class Checkpoint(Record):
+    version: int = 1
+    stage: str = "pregătire"
+    tasks: list[SearchTask] = Field(default_factory=list)
+    candidates: list[Candidate] = Field(default_factory=list)
+    images_attempted: bool = False
+    reference_images: list[ImageSignature] = Field(default_factory=list)
+    rounds: int = 0
+    elapsed_seconds: float = 0
+    correction_history: list[dict] = Field(default_factory=list)
+    screenshot_texts: list[str] = Field(default_factory=list)
+
+Candidate.model_rebuild()
+Source.model_rebuild()
+Analysis.model_rebuild()

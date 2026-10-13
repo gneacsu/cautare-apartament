@@ -18,7 +18,13 @@ class Settings:
     model: str = "gemini-3.6-flash"
     thinking_level: str = "medium"
     api_key: str = field(default="", repr=False)
-    analysis_seconds: int = 600
+    serpapi_key: str = field(default="", repr=False)
+    search_seconds: int = 60
+    pages_per_query: int = 2
+    max_followup_queries: int = 4
+    max_images_per_listing: int = 6
+    max_image_bytes: int = 8_000_000
+    analysis_seconds: int = 900
     http_seconds: int = 12
     max_page_bytes: int = 2_000_000
     max_input_chars: int = 16000
@@ -37,12 +43,12 @@ class Settings:
         load_dotenv(ROOT / ".env", override=False)
         values = {}
         bounds = {
-            "analysis_seconds": (30, 1200), "http_seconds": (3, 30),
+            "search_seconds": (10, 120), "pages_per_query": (1, 5),
+            "max_followup_queries": (0, 12), "max_images_per_listing": (1, 12),
+            "analysis_seconds": (30, 3600), "http_seconds": (3, 30),
             "max_input_chars": (1000, 32000), "max_candidate_chars": (1000, 16000),
-            "max_candidates": (1, 60), "max_searches": (1, 6),
-            "max_ai_calls": (2, 40), "max_output_tokens": (1000, 16384),
+            "max_output_tokens": (1000, 16384),
             "comparison_batch_size": (1, 4),
-            "search_results_per_call": (1, 12),
         }
         for field, (low, high) in bounds.items():
             raw = os.getenv(field.upper())
@@ -54,6 +60,7 @@ class Settings:
                 if not low <= value <= high:
                     raise ConfigurationError(f"{field.upper()} trebuie să fie între {low} și {high}.")
                 values[field] = value
+        values["serpapi_key"] = os.getenv("SERPAPI_API_KEY", "").strip()
         values["api_key"] = os.getenv("GEMINI_API_KEY", "").strip()
         values["model"] = os.getenv("GEMINI_MODEL", cls.model).strip()
         if not values["model"]:

@@ -10,6 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from src.config import Settings
+from src.extractors.images import image_urls
 from src.models import Source
 from src.utils.urls import InvalidURL, public_url
 
@@ -105,10 +106,28 @@ class PageReader:
                     # Let Beautiful Soup inspect the declared HTML encoding when needed.
                     html = str(BeautifulSoup(bytes(data), "html.parser"))
                     title, text = extract_html(html, max_chars or self.settings.max_input_chars)
-                    return Source(url=original, final_url=url, title=title, text=text,
+                    return Source(url=original, final_url=url, title=title, text=text, images=image_urls(html, url),
+                                  links=source_links(html, url),
                                   access="page", accessed_at=now())
             raise PageError("Pagina are prea multe redirecționări.")
         except requests.RequestException:
             raise PageError("Pagina nu poate fi accesată în acest moment. Copiază descrierea manual sau reîncearcă.") from None
         except InvalidURL as exc:
             raise PageError(str(exc)) from None
+
+
+def source_links(html, base_url):
+    """Only explicitly labelled source links; never crawl the whole site navigation."""
+    soup = BeautifulSoup(html, "html.parser")
+    links = []
+    for a in soup.select("a[href]"):
+        label = a.get_text(" ", strip=True).lower()
+        if any(word in label for word in ("anunțul original", "anuntul original", "vezi sursa", "sursa anunțului", "sursa anuntului")):
+            from src.utils.urls import canonical_url
+            try:
+                link = canonical_url(urljoin(base_url, a["href"]))
+                if link not in links:
+                    links.append(link)
+            except InvalidURL:
+                pass
+    return links[:5]

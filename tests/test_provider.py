@@ -245,3 +245,16 @@ def test_sdk_serializes_compact_comparison_and_restores_url():
     thinking = types.ThinkingConfig.model_validate(captured[0]["generationConfig"]["thinkingConfig"])
     assert thinking.thinking_level == types.ThinkingLevel.MEDIUM
     assert thinking.thinking_budget is None
+
+
+def test_screenshot_transcription_uses_image_parts_and_schema_without_search():
+    from src.analyzers.provider import transcribe_screenshots
+    provider, client = provider_with(response('{"text":"Proprietar, vând apartament","limitations":[]}'))
+    output=transcribe_screenshots(provider,[(b'jpeg-image','image/jpeg')],timeout=20)
+    request=client.models.generate_content.call_args.kwargs
+    assert request['contents'][1].inline_data.mime_type=='image/jpeg'
+    assert request['contents'][1].inline_data.data==b'jpeg-image'
+    assert request['config'].tools is None
+    assert 'text' in request['config'].response_json_schema['properties']
+    assert provider.diagnostics[0].operation=='transcriere capturi'
+    assert output.text.startswith('Proprietar')

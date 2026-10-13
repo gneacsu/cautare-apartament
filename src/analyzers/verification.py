@@ -57,8 +57,11 @@ def sufficiently_supported(original: Listing, result: Assessment, source: Source
     a, b = original.facts, result.facts
     location = any(x and y and normalized(x) == normalized(y)
                    for x, y in ((a.address, b.address), (a.area, b.area)))
-    surface = (a.surface is not None and b.surface is not None and a.surface == b.surface
+    surface = (a.surface is not None and b.surface is not None and abs(a.surface - b.surface) <= max(1, a.surface * .02)
                and a.surface_kind != "necunoscută" and a.surface_kind == b.surface_kind)
     floor = a.floor is not None and b.floor is not None and normalized(a.floor) == normalized(b.floor)
     rooms = a.rooms is not None and a.rooms == b.rooms
-    return bool(shared or (location and surface and floor and rooms))
+    identical_photo = any(match.kind == "identical" for match in source.image_matches)
+    # Similar hashes alone never establish a match. An identical photo still needs facts.
+    return bool(shared or (location and surface and floor and rooms)
+                or (identical_photo and location and rooms and (surface or floor)))
